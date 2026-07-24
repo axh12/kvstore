@@ -1,21 +1,3 @@
-"""
-Custom LRU (Least Recently Used) cache engine.
-
-Implemented from scratch using a hashmap + doubly linked list so that
-get, put, and evict are all O(1) — no reliance on collections.OrderedDict.
-
-Design notes (for interview discussion):
-- Hashmap (dict) maps key -> Node, giving O(1) lookup.
-- Doubly linked list maintains recency order: head = most recently used,
-  tail = least recently used. Moving a node to the head on access, and
-  evicting from the tail on overflow, are both O(1) pointer operations.
-- TTL is stored per-node as an absolute expiry timestamp. Expired keys
-  are lazily evicted on access and swept periodically by a background
-  thread, so memory doesn't grow unbounded from dead keys nobody reads.
-- A single re-entrant lock guards all mutations, making the store safe
-  for concurrent access from multiple FastAPI worker threads.
-"""
-
 import threading
 import time
 from dataclasses import dataclass, field
@@ -26,7 +8,7 @@ from typing import Any, Optional
 class Node:
     key: str
     value: Any
-    expires_at: Optional[float] = None  # epoch seconds, None = no expiry
+    expires_at: Optional[float] = None 
     prev: "Optional[Node]" = None
     next: "Optional[Node]" = None
 
@@ -50,13 +32,10 @@ class LRUCache:
         self._lock = threading.RLock()
         self.stats = Stats()
 
-        # Sentinel head/tail nodes simplify edge cases (empty list, single node).
         self._head = Node(key="__head__", value=None)
         self._tail = Node(key="__tail__", value=None)
         self._head.next = self._tail
-        self._tail.prev = self._head
-
-    # ---- internal doubly-linked-list helpers ----
+        self._tail.prev = self._head  
 
     def _remove(self, node: Node) -> None:
         node.prev.next = node.next
@@ -75,7 +54,7 @@ class LRUCache:
     def _evict_tail(self) -> None:
         lru_node = self._tail.prev
         if lru_node is self._head:
-            return  # empty
+            return 
         self._remove(lru_node)
         del self._map[lru_node.key]
         self.stats.evictions += 1
@@ -83,7 +62,6 @@ class LRUCache:
     def _is_expired(self, node: Node) -> bool:
         return node.expires_at is not None and node.expires_at <= time.time()
 
-    # ---- public API ----
 
     def get(self, key: str) -> Optional[Any]:
         with self._lock:
