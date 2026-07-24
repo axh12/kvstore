@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KVStore Dashboard</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1115; color: #e6e6e6; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9aa0ab; font-size: 13px; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+  .card { background: #171a21; border: 1px solid #262b36; border-radius: 8px; padding: 14px 16px; }
+  .card .label { font-size: 11px; color: #9aa0ab; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #262b36; }
+  th { color: #9aa0ab; font-weight: 500; }
+  .panel { background: #171a21; border: 1px solid #262b36; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px 0; color: #c7cbd1; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input { background: #0f1115; border: 1px solid #333a47; color: #e6e6e6; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+  button { background: #3b82f6; border: none; color: white; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #2563eb; }
+  a { color: #60a5fa; }
+</style>
+</head>
+<body>
+  <h1>KVStore</h1>
+  <div class="sub">In-memory LRU cache with TTL &amp; disk snapshotting — <a href="/docs">API docs</a></div>
+
+  <div class="grid" id="stats-grid"></div>
+
+  <div class="panel">
+    <h2>Set a key</h2>
+    <form id="put-form">
+      <input id="put-key" placeholder="key" required />
+      <input id="put-value" placeholder="value" required />
+      <input id="put-ttl" placeholder="ttl seconds (optional)" />
+      <button type="submit">PUT</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>Live keys (MRU → LRU)</h2>
+    <table>
+      <thead><tr><th>Key</th><th>Value</th><th>Expires In</th><th></th></tr></thead>
+      <tbody id="keys-body"></tbody>
+    </table>
+  </div>
+
+<script>
+async function refresh() {
+  const [stats, keys] = await Promise.all([
+    fetch('/stats').then(r => r.json()),
+    fetch('/keys').then(r => r.json()),
+  ]);
+
+  const grid = document.getElementById('stats-grid');
+  const cards = [
+    ['Size', `${stats.size} / ${stats.capacity}`],
+    ['Hit Rate', `${(stats.hit_rate * 100).toFixed(1)}%`],
+    ['Evictions', stats.evictions],
+    ['Expirations', stats.expirations],
+  ];
+  grid.innerHTML = cards.map(([label, value]) =>
+    `<div class="card"><div class="label">${label}</div><div class="value">${value}</div></div>`
+  ).join('');
+
+  const now = Date.now() / 1000;
+  const body = document.getElementById('keys-body');
+  body.innerHTML = keys.map(k => {
+    const expires = k.expires_at ? `${Math.max(0, Math.round(k.expires_at - now))}s` : '—';
+    return `<tr>
+      <td>${escapeHtml(k.key)}</td>
+      <td>${escapeHtml(JSON.stringify(k.value))}</td>
+      <td>${expires}</td>
+      <td><button onclick="del('${escapeHtml(k.key)}')">delete</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:#9aa0ab">No keys yet</td></tr>';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function del(key) {
+  await fetch(`/keys/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  refresh();
+}
+
+document.getElementById('put-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const key = document.getElementById('put-key').value;
+  const rawValue = document.getElementById('put-value').value;
+  const ttl = document.getElementById('put-ttl').value;
+  let value;
+  try { value = JSON.parse(rawValue); } catch { value = rawValue; }
+  await fetch(`/keys/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value, ttl_seconds: ttl ? Number(ttl) : null }),
+  });
+  document.getElementById('put-form').reset();
+  refresh();
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
