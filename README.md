@@ -1,5 +1,5 @@
 # KVStore
-Built to internalize LRU cache design — a classic SDE interview question — by implementing it from scratch (hashmap + doubly linked list, no OrderedDict) and pushing it further with TTL expiry, thread safety, and crash-safe persistence, the way a real system like Redis would need.
+Built to internalize LRU cache design by implementing it from scratch (hashmap + doubly linked list, no OrderedDict) and pushing it further with TTL expiry, thread safety, and crash-safe persistence, the way a real system like Redis would need.
 
 An in-memory key-value store with LRU eviction, TTL expiry, thread-safety, and
 periodic disk snapshotting — built from scratch in Python and exposed as a
